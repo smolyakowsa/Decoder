@@ -38,40 +38,25 @@ class CustomCounterApp:
             return
 
         try:
-            df = pd.read_excel(self.selected_file)
-            num_columns = len(df.iloc[10].dropna())
+            df = pd.read_excel(self.selected_file, header=None)
 
-            if num_columns == 11:
-                header_rows = 10
-                check_col = 5
-                insert_col = 6
-            elif num_columns == 7:
-                header_rows = 7
-                check_col = 4
-                insert_col = 5
-            else:
-                raise ValueError("Неподдерживаемое количество столбцов в файле.")
+            code_col_index = self.find_code_column(df)
+            if code_col_index is None:
+                raise ValueError("Столбец с кодами услуг не найден.")
 
-            new_df = df.iloc[:header_rows].copy()
-            new_df.insert(insert_col, 'Расшифровка услуги', '')
+            new_df = df.copy()
+            new_df.insert(code_col_index + 1, "Расшифровка услуги", "")
 
-            for idx in range(header_rows, len(df)):
-                row = df.iloc[idx].tolist()
-                main_data = row[:check_col + 1]
-                while len(main_data) < check_col + 1:
-                    main_data.append('')
+            for idx in range(len(new_df)):
+                if idx == 0:
+                    continue
 
-                code = main_data[check_col]
-                description = data_dict.get(code, '')
+                code = new_df.iloc[idx, code_col_index]
+                if pd.isna(code) or code == "":
+                    continue
 
-                extra_data = row[check_col + 1:]
-                while len(extra_data) < (len(df.columns) - (check_col + 1)):
-                    extra_data.append('')
-
-                full_row = main_data + [description] + extra_data
-
-                if len(full_row) == len(new_df.columns):
-                    new_df.loc[len(new_df)] = full_row
+                description = data_dict.get(str(code).strip(), "")
+                new_df.iloc[idx, code_col_index + 1] = description
 
             folder_path = filedialog.askdirectory(title="Выберите папку для сохранения")
             if not folder_path:
@@ -84,11 +69,18 @@ class CustomCounterApp:
                 file_path = os.path.join(folder_path, f"{base_name}({counter}).xlsx")
                 counter += 1
 
-            new_df.to_excel(file_path, index=False)
+            new_df.to_excel(file_path, index=False, header=False)
             messagebox.showinfo("Успех", f"Файл успешно сохранен по пути:\n{file_path}")
 
         except Exception as e:
             messagebox.showerror("Ошибка", f"Произошла ошибка: {str(e)}")
+
+    def find_code_column(self, df):
+        for col_index in range(len(df.columns)):
+            for cell in df[col_index]:
+                if isinstance(cell, str) and "код услуги" in cell.lower():
+                    return col_index
+        return None
 
 
 if __name__ == "__main__":
